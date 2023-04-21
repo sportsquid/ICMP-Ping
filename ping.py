@@ -88,14 +88,14 @@ ip_header += ip_to_bytes(dest_ip)  # Destination Address
 
 packet = ip_header + packet
     
-s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW,socket.IPPROTO_ICMP)
 #s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 s.settimeout(1) #waiting a bit longer because program was missing quite a few packets
 while True:
     print("pinging " + str(dest_ip))
     
-    x = s.sendto(packet, (dest_ip,0))
-    print(str(x) + " bytes sent")
+    s.sendto(packet, ("192.168.1.9",0))
+    
     
     
     try:
