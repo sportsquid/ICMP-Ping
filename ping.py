@@ -42,41 +42,37 @@ def string_to_bytes(string):
   return int(string, 2).to_bytes(len(string) // 8, byteorder='big')
 
 
-#provided checksum function
-def checksum(string):
-    csum = 0
-    countTo = (len(string) // 2) * 2
-    count = 0
-
-    while count < countTo:
-        thisVal = ord(string[count+1]) * 256 + ord(string[count])
-        csum = csum + thisVal
-        csum = csum & 0xffffffff
-        count = count + 2
-    if countTo < len(string):
-        csum = csum + ord(string[len(string) - 1])
-        csum = csum & 0xffffffff
-    csum = (csum >> 16) + (csum & 0xffff)
-    csum = csum + (csum >> 16)
-    answer = ~csum
-    answer = answer & 0xffff
-    answer = answer >> 8 | (answer << 8 & 0xff00)
-    return answer 
+#different checksum that uses bytearrays instead
+#works properly on my system and is easier to use with the rest of my code
+#due to less conversions
+def checksum(data):
+    if len(data) % 2 != 0:
+        data += b'\x00'
+    sum = 0
+    for i in range(0, len(data), 2):
+        word = (data[i] << 8) + data[i+1]
+        sum += word
+    while (sum >> 16) != 0:
+        sum = (sum & 0xFFFF) + (sum >> 16)
+    return struct.pack('!H', ~sum & 0xFFFF)
 
 source_ip = get_local_ip()
-dest_ip = '127.0.0.1'	# or socket.gethostbyname('www.google.com')
+dest_ip = socket.gethostbyname(sys.argv[1])
 
-packet_padding = str(format(0, '0160b'))
-packet_type = "00001000" 
-packet_code = "00000000"
-packet_checksum = "0000000000000000"
-packet_ID = "1010101010101010"
-packet_sequence = "0101010101010101"
-packet = packet_type + packet_code + packet_checksum + packet_ID + packet_sequence 
 
-packet_checksum = str(format(checksum(packet), '08b'))
-packet = packet_type + packet_code + packet_checksum + packet_ID + packet_sequence 
-packet = string_to_bytes(packet)
+packet_type = b'\x08'
+packet_code = b'\x00'
+packet_checksum = b'\x00\x00'
+packet_ID = b'\xaa\xaa'
+packet_sequence = b'\xff\xff'
+packet_data = str(time.time()).encode()
+packet = packet_type + packet_code + packet_checksum + packet_ID + packet_sequence + packet_data
+
+print(packet)
+packet_checksum = checksum(packet)
+print(packet_checksum)
+packet = packet_type + packet_code + packet_checksum + packet_ID + packet_sequence +packet_data
+
 
 
 
@@ -93,21 +89,19 @@ ip_header += ip_to_bytes(dest_ip)  # Destination Address
 packet = ip_header + packet
     
 s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+#s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+s.settimeout(1) #waiting a bit longer because program was missing quite a few packets
 while True:
-    print("sending ping")
+    print("pinging " + str(dest_ip))
     
-    x = s.sendto(packet, ("10.0.0.1",0))
-    print(x)
-    time.sleep(.1)
+    x = s.sendto(packet, (dest_ip,0))
+    print(str(x) + " bytes sent")
     
-"""
+    
     try:
-        print("recieving")
-        message = s.recv(64).decode()
-        print(message)
-        s.decode
+        message = s.recv(100)
+        print("receved packet length" + str(len(message)))
 
-    finally:
-        exit()
-"""
+    except socket.timeout:
+        print("Packet Lost")
+        break
